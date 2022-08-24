@@ -1,13 +1,9 @@
-name: tutorial
+name: pmdarima-example
 channels:
-- conda-forge
+  - conda-forge
 dependencies:
-- python=3.10.5
-- pip<=22.2.2
-- pip:
-  - mlflow
-  - pandas==1.4.3
-  - scikit-learn==1.1.1
-  - typing-extensions==4.3.0
-  - xgboost==1.6.1
-  name: mlflow-env
+  - python=3.8
+  - pip
+  - pip:
+    - pmdarima
+    - mlflow>=1.23.1

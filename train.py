@@ -9,87 +9,65 @@ import datetime
 ct = datetime.datetime.now()
 print("start time: ", ct)
 
-import argparse
-
-from sklearn import datasets
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, log_loss
-import xgboost as xgb
-import matplotlib as mpl
-
-
 import mlflow
-import mlflow.xgboost
+import json
+import numpy as np
+from pmdarima import auto_arima
+from pmdarima.datasets import load_wineind
+from pmdarima import model_selection
 
 
-mpl.use("Agg")
+ARTIFACT_PATH = "model"
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="XGBoost example")
-    parser.add_argument(
-        "--learning-rate",
-        type=float,
-        default=0.3,
-        help="learning rate to update step size at each boosting step (default: 0.3)",
+def calculate_cv_metrics(model, endog, metric, cv):
+    cv_metric = model_selection.cross_val_score(model, endog, cv=cv, scoring=metric, verbose=0)
+    return cv_metric[~np.isnan(cv_metric)].mean()
+
+
+with mlflow.start_run():
+
+    data = load_wineind()
+
+    train, test = model_selection.train_test_split(data, train_size=150)
+
+    print("Training AutoARIMA model...")
+    arima = auto_arima(
+        train,
+        error_action="ignore",
+        trace=False,
+        suppress_warnings=True,
+        maxiter=5,
+        seasonal=True,
+        m=12,
     )
-    parser.add_argument(
-        "--colsample-bytree",
-        type=float,
-        default=1.0,
-        help="subsample ratio of columns when constructing each tree (default: 1.0)",
-    )
-    parser.add_argument(
-        "--subsample",
-        type=float,
-        default=1.0,
-        help="subsample ratio of the training instances (default: 1.0)",
-    )
-    return parser.parse_args()
 
+    print("Model trained. \nExtracting parameters...")
+    parameters = arima.get_params(deep=True)
 
-def main():
-    # parse command-line arguments
-    args = parse_args()
+    metrics = {x: getattr(arima, x)() for x in ["aicc", "aic", "bic", "hqic", "oob"]}
 
-    # prepare train and test data
-    iris = datasets.load_iris()
-    X = iris.data
-    y = iris.target
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Cross validation backtesting
+    cross_validator = model_selection.RollingForecastCV(h=10, step=20, initial=60)
 
-    # enable auto logging
-    mlflow.xgboost.autolog()
+    for x in ["smape", "mean_absolute_error", "mean_squared_error"]:
+        metrics[x] = calculate_cv_metrics(arima, data, x, cross_validator)
 
-    dtrain = xgb.DMatrix(X_train, label=y_train)
-    dtest = xgb.DMatrix(X_test, label=y_test)
+    print(f"Metrics: \n{json.dumps(metrics, indent=2)}")
+    print(f"Parameters: \n{json.dumps(parameters, indent=2)}")
 
-    with mlflow.start_run():
+    mlflow.pmdarima.log_model(pmdarima_model=arima, artifact_path=ARTIFACT_PATH)
+    mlflow.log_params(parameters)
+    mlflow.log_metrics(metrics)
+    model_uri = mlflow.get_artifact_uri(ARTIFACT_PATH)
 
-        # train model
-        params = {
-            "objective": "multi:softprob",
-            "num_class": 3,
-            "learning_rate": args.learning_rate,
-            "eval_metric": "mlogloss",
-            "colsample_bytree": args.colsample_bytree,
-            "subsample": args.subsample,
-            "seed": 42,
-        }
-        model = xgb.train(params, dtrain, evals=[(dtrain, "train")])
+    print(f"Model artifact logged to: {model_uri}")
 
-        # evaluate model
-        y_proba = model.predict(dtest)
-        y_pred = y_proba.argmax(axis=1)
-        loss = log_loss(y_test, y_proba)
-        acc = accuracy_score(y_test, y_pred)
+loaded_model = mlflow.pmdarima.load_model(model_uri)
 
-        # log metrics
-        mlflow.log_metrics({"log_loss": loss, "accuracy": acc})
+forecast = loaded_model.predict(30)
 
-
-if __name__ == "__main__":
-    main()
+print(f"Forecast: \n{forecast}")
 
 # ct stores current time
 ct = datetime.datetime.now()
