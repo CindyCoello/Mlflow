@@ -1,10 +1,13 @@
 name: tutorial
 channels:
-  - defaults
+- conda-forge
 dependencies:
-  - numpy>=1.14.3
-  - pandas>=1.0.0
-  - scikit-learn>0.19.1
-  - pip
-  - pip:
-    - mlflow
+- python=3.10.5
+- pip<=22.2.2
+- pip:
+  - mlflow
+  - pandas==1.4.3
+  - scikit-learn==1.1.1
+  - typing-extensions==4.3.0
+  - xgboost==1.6.1
+  name: mlflow-env
