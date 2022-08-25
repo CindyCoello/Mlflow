@@ -1,5 +1,5 @@
 import mlflow
-mlflow.set_tracking_uri("http://ec2-35-165-52-7.us-west-2.compute.amazonaws.com:5000/")
+mlflow.set_tracking_uri("http://ec2-35-88-229-177.us-west-2.compute.amazonaws.com:5000/")
 mlflow.set_experiment("QA-experiments")
 
 import tempfile
