@@ -1,4 +1,4 @@
-name: pmdarima-example
+name: diviner-example
 conda_env: conda.yaml
 entry_points:
   main:
